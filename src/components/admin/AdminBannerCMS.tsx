@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Image as ImageIcon, Sparkles, Check, Save, Layers, Phone, Upload, Monitor, Smartphone, Info, RefreshCw } from 'lucide-react';
+import { Image as ImageIcon, Sparkles, Check, Save, Layers, Phone, Upload, Monitor, Smartphone, Info, RefreshCw, Loader2 } from 'lucide-react';
 import { CMSBanner, StoreSettings, TrouserProduct } from '../../types';
+import { supabaseService } from '../../lib/supabase';
 
 interface AdminBannerCMSProps {
   banner: CMSBanner;
@@ -25,6 +26,9 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
   const [mobileImageUrl, setMobileImageUrl] = useState(banner.mobileImageUrl || '');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
 
+  const [isUploadingDesktop, setIsUploadingDesktop] = useState(false);
+  const [isUploadingMobile, setIsUploadingMobile] = useState(false);
+
   const desktopFileInputRef = useRef<HTMLInputElement>(null);
   const mobileFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,49 +44,68 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Helper function to process uploaded files (resizes if huge for fast loading)
-  const processImageFile = (file: File, isMobile: boolean) => {
+  const processImageFile = async (file: File, isMobile: boolean) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+    if (isMobile) setIsUploadingMobile(true);
+    else setIsUploadingDesktop(true);
 
-        // Cap max dimensions to keep payload clean, fast & database friendly
-        const maxDim = isMobile ? 900 : 1600;
-        const quality = isMobile ? 0.80 : 0.82;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
+    try {
+      // 1. Try uploading to Supabase Storage first
+      const publicStorageUrl = await supabaseService.uploadAssetFile(file, isMobile ? 'mobile-banners' : 'desktop-banners');
+      if (publicStorageUrl) {
+        if (isMobile) setMobileImageUrl(publicStorageUrl);
+        else setImageUrl(publicStorageUrl);
+        return;
+      }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          if (isMobile) {
-            setMobileImageUrl(compressedDataUrl);
-          } else {
-            setImageUrl(compressedDataUrl);
+      // 2. Fallback: Compress using HTML5 Canvas to lightweight JPEG
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Target compact dimensions (1200px desktop, 800px mobile)
+          const maxDim = isMobile ? 800 : 1200;
+          const quality = 0.75;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
           }
-        } else {
-          const rawUrl = event.target?.result as string;
-          if (isMobile) setMobileImageUrl(rawUrl);
-          else setImageUrl(rawUrl);
-        }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            if (isMobile) {
+              setMobileImageUrl(compressedDataUrl);
+            } else {
+              setImageUrl(compressedDataUrl);
+            }
+          } else {
+            const rawUrl = event.target?.result as string;
+            if (isMobile) setMobileImageUrl(rawUrl);
+            else setImageUrl(rawUrl);
+          }
+        };
+        img.src = event.target?.result as string;
       };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Image processing error:', err);
+    } finally {
+      setIsUploadingDesktop(false);
+      setIsUploadingMobile(false);
+    }
   };
 
   const handleDesktopFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,16 +259,25 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
               />
 
               <div 
-                onClick={() => desktopFileInputRef.current?.click()}
-                className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group"
+                onClick={() => !isUploadingDesktop && desktopFileInputRef.current?.click()}
+                className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group relative"
               >
-                <Upload className="w-6 h-6 text-blue-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-blue-700 block">
-                  মোবাইল বা কম্পিউটার থেকে ছবি সিলেক্ট করুন
-                </span>
-                <span className="text-[10px] text-gray-500">
-                  (PNG, JPG, WEBP, JPEG সাপোর্টেড)
-                </span>
+                {isUploadingDesktop ? (
+                  <div className="py-2 flex flex-col items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-blue-600 animate-spin mb-1" />
+                    <span className="font-bold text-blue-700 text-xs">ইমেজ প্রসেস ও আপলোড হচ্ছে...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-6 h-6 text-blue-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                    <span className="font-bold text-blue-700 block">
+                      মোবাইল বা কম্পিউটার থেকে ছবি সিলেক্ট করুন
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      (PNG, JPG, WEBP, JPEG সাপোর্টেড)
+                    </span>
+                  </>
+                )}
               </div>
 
               <div className="relative">
@@ -281,16 +313,25 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
               />
 
               <div 
-                onClick={() => mobileFileInputRef.current?.click()}
-                className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group"
+                onClick={() => !isUploadingMobile && mobileFileInputRef.current?.click()}
+                className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group relative"
               >
-                <Upload className="w-6 h-6 text-purple-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-purple-700 block">
-                  মোবাইল ব্যানার সিলেক্ট করুন
-                </span>
-                <span className="text-[10px] text-gray-500">
-                  (ডিভাইস থেকে পছন্দমতো মোবাইল সাইজ ছবি বেছে নিন)
-                </span>
+                {isUploadingMobile ? (
+                  <div className="py-2 flex flex-col items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-purple-600 animate-spin mb-1" />
+                    <span className="font-bold text-purple-700 text-xs">ইমেজ প্রসেস ও আপলোড হচ্ছে...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-6 h-6 text-purple-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                    <span className="font-bold text-purple-700 block">
+                      মোবাইল ব্যানার সিলেক্ট করুন
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      (ডিভাইস থেকে পছন্দমতো মোবাইল সাইজ ছবি বেছে নিন)
+                    </span>
+                  </>
+                )}
               </div>
 
               <div className="relative">

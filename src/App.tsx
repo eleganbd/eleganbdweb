@@ -335,23 +335,14 @@ export default function App() {
         }
 
         const remoteBanner = await supabaseService.getBanner();
-        if (remoteBanner) {
-          setCmsBannerData(prev => {
-            const prevTime = prev?.updatedAt || 0;
-            const remoteTime = remoteBanner?.updatedAt || 0;
-            if (remoteTime >= prevTime) {
-              try {
-                localStorage.setItem('elegan_cms_banner', JSON.stringify(remoteBanner));
-              } catch {}
-              return remoteBanner;
-            } else {
-              supabaseService.saveBanner(prev);
-              return prev;
-            }
-          });
+        if (remoteBanner && remoteBanner.imageUrl) {
+          setCmsBannerData(remoteBanner);
+          try {
+            localStorage.setItem('elegan_cms_banner', JSON.stringify(remoteBanner));
+          } catch {}
         } else {
           setCmsBannerData(prev => {
-            if (prev) supabaseService.saveBanner(prev);
+            if (prev && prev.imageUrl) supabaseService.saveBanner(prev);
             return prev;
           });
         }
@@ -381,6 +372,9 @@ export default function App() {
             const row = payload.new as { key?: string; value?: any };
             if (row.key === 'hero_banner' && row.value) {
               setCmsBannerData(row.value);
+              try {
+                localStorage.setItem('elegan_cms_banner', JSON.stringify(row.value));
+              } catch {}
             } else if (row.key === 'products_list' && Array.isArray(row.value) && row.value.length > 0) {
               setProductsList(row.value);
               try {

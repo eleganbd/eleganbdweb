@@ -315,6 +315,36 @@ export const supabaseService = {
   // ==============================
   // 4. SITE SETTINGS & BANNER
   // ==============================
+  async uploadAssetFile(file: File, folder = 'banners'): Promise<string | null> {
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      
+      // Try uploading to 'site-assets'
+      const { data, error } = await supabase.storage
+        .from('site-assets')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage.from('site-assets').getPublicUrl(data.path);
+        return publicUrlData.publicUrl;
+      }
+
+      // Fallback bucket 'public'
+      const { data: data2, error: error2 } = await supabase.storage
+        .from('public')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+      if (!error2 && data2) {
+        const { data: publicUrlData } = supabase.storage.from('public').getPublicUrl(data2.path);
+        return publicUrlData.publicUrl;
+      }
+    } catch (e) {
+      console.warn('Supabase storage upload error:', e);
+    }
+    return null;
+  },
+
   async saveBanner(banner: CMSBanner): Promise<boolean> {
     try {
       const payload = {

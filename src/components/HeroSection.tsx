@@ -12,8 +12,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   banner,
   onExploreCollection
 }) => {
-  const desktopBannerUrl = banner?.imageUrl?.trim() || HERO_IMAGE;
-  const mobileBannerUrl = banner?.mobileImageUrl?.trim() || desktopBannerUrl;
+  const rawDesktop = banner?.imageUrl?.trim();
+  const rawMobile = banner?.mobileImageUrl?.trim();
+
+  const desktopBannerUrl = rawDesktop || HERO_IMAGE;
+  const mobileBannerUrl = rawMobile || rawDesktop || HERO_IMAGE;
 
   const [desktopSrc, setDesktopSrc] = useState<string>(desktopBannerUrl);
   const [mobileSrc, setMobileSrc] = useState<string>(mobileBannerUrl);
@@ -34,10 +37,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* 💻 Desktop Banner Container (1920 × 700 px Aspect Ratio) */}
       <div className="hidden md:block w-full aspect-[1920/700] relative overflow-hidden bg-[#0f172a]">
         <img 
+          key={desktopSrc}
           src={desktopSrc} 
-          alt={banner?.headline || "Elegan BD Luxury Formal Pants - Desktop Banner"} 
-          onError={() => setDesktopSrc(HERO_IMAGE)}
-          referrerPolicy="no-referrer"
+          alt="Elegan BD Luxury Formal Pants - Desktop Banner" 
+          onError={() => {
+            if (desktopSrc !== HERO_IMAGE) {
+              setDesktopSrc(HERO_IMAGE);
+            }
+          }}
           className="w-full h-full object-cover object-center block"
         />
       </div>
@@ -45,16 +52,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       {/* 📱 Mobile Hero Banner Container (800 × 900 px Aspect Ratio) */}
       <div className="block md:hidden w-full aspect-[800/900] relative overflow-hidden bg-[#0f172a]">
         <img 
+          key={mobileSrc}
           src={mobileSrc} 
-          alt={banner?.headline || "Elegan BD Luxury Formal Pants - Mobile Banner"} 
+          alt="Elegan BD Luxury Formal Pants - Mobile Banner" 
           onError={() => {
-            if (mobileSrc !== desktopSrc) {
+            if (mobileSrc !== desktopSrc && desktopSrc !== HERO_IMAGE) {
               setMobileSrc(desktopSrc);
-            } else {
+            } else if (mobileSrc !== HERO_IMAGE) {
               setMobileSrc(HERO_IMAGE);
             }
           }}
-          referrerPolicy="no-referrer"
           className="w-full h-full object-cover object-center block"
         />
       </div>
