@@ -8,7 +8,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { TrouserProduct, SizeNumber, HemStyle } from '../types';
-import { PRODUCTS } from '../data/products';
+import { PRODUCTS, HERO_IMAGE } from '../data/products';
 import ashBackImg from '../assets/images/pant_ash_back_1789812670313.jpg';
 
 interface ProductDetailPageProps {
@@ -149,6 +149,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 src={selectedImage} 
                 alt={product.name} 
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = HERO_IMAGE;
+                }}
                 className="w-full h-full object-cover object-center"
               />
 

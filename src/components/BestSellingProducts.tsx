@@ -1,5 +1,6 @@
 import React from 'react';
 import { TrouserProduct, SizeNumber, HemStyle } from '../types';
+import { HERO_IMAGE } from '../data/products';
 
 interface BestSellingProductsProps {
   products?: TrouserProduct[];
@@ -50,6 +51,9 @@ export const BestSellingProducts: React.FC<BestSellingProductsProps> = ({
                     src={product.imageUrl}
                     alt={product.name}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = HERO_IMAGE;
+                    }}
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
                 </div>

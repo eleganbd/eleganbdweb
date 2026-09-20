@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Image as ImageIcon, Sparkles, Check, Save, Layers, Phone, MapPin, Mail, ExternalLink, Monitor, Smartphone, Info } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Image as ImageIcon, Sparkles, Check, Save, Layers, Phone, Upload, Monitor, Smartphone, Info, RefreshCw } from 'lucide-react';
 import { CMSBanner, StoreSettings, TrouserProduct } from '../../types';
 
 interface AdminBannerCMSProps {
@@ -25,6 +25,9 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
   const [mobileImageUrl, setMobileImageUrl] = useState(banner.mobileImageUrl || '');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
 
+  const desktopFileInputRef = useRef<HTMLInputElement>(null);
+  const mobileFileInputRef = useRef<HTMLInputElement>(null);
+
   React.useEffect(() => {
     setHeadline(banner.headline);
     setSubheadline(banner.subheadline);
@@ -35,6 +38,61 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
   }, [banner]);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Helper function to process uploaded files (resizes if huge for fast loading)
+  const processImageFile = (file: File, isMobile: boolean) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Cap max dimensions to keep payload clean & fast
+        const maxDim = isMobile ? 1200 : 2000;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          if (isMobile) {
+            setMobileImageUrl(compressedDataUrl);
+          } else {
+            setImageUrl(compressedDataUrl);
+          }
+        } else {
+          const rawUrl = event.target?.result as string;
+          if (isMobile) setMobileImageUrl(rawUrl);
+          else setImageUrl(rawUrl);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDesktopFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file, false);
+  };
+
+  const handleMobileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file, true);
+  };
 
   // About & Contact state
   const [aboutText, setAboutText] = useState('ELEGAN BD crafts bespoke and ready-to-wear luxury formal trousers designed for Bangladesh’s dynamic professionals.');
@@ -73,14 +131,14 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
             Banner & Storefront CMS
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            হোমপেজ হিরো ব্যানার (Desktop & Mobile Size), ফিচার্ড প্রোডাক্ট, অ্যাবাউট আস ও কন্টাক্ট ইনফো এডিটর
+            ডিভাইস থেকে সরাসরি ফটো আপলোড করে হোমপেজ ব্যানার (Desktop 1920×700 & Mobile 800×900) রিয়েল-টাইম সেট করুন
           </p>
         </div>
 
         {savedSuccess && (
           <div className="px-4 py-2 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-1.5 animate-fadeIn">
             <Check className="w-4 h-4" />
-            <span>হোমপেজ ব্যানার সফলভাবে আপডেট হয়েছে!</span>
+            <span>হোমপেজ ব্যানার লাইভ আপডেট হয়েছে!</span>
           </div>
         )}
       </div>
@@ -100,9 +158,8 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
               <span>১. 💻 Desktop Hero Banner (ডেস্কটপ সাইজ)</span>
             </div>
             <div className="text-[11px] text-gray-600 space-y-0.5 pl-6">
-              <p>• <b>স্ট্যান্ডার্ড সাইজ:</b> <span className="text-blue-700 font-semibold">1920 × 700 pixels</span> (সবচেয়ে পারফেক্ট ও ক্রিস্প ডিসপ্লে)</p>
-              <p>• <b>অল্টারনেটিভ সাইজ:</b> 1600 × 600 px অথবা 1920 × 800 px</p>
-              <p>• <b>Aspect Ratio:</b> 16:6 বা 16:7 (ওয়াইড স্ক্রিন ল্যান্ডস্কেপ)</p>
+              <p>• <b>রেকমেন্ডেড সাইজ:</b> <span className="text-blue-700 font-semibold">1920 × 700 pixels</span> (সবচেয়ে ক্রিস্প ডিসপ্লে)</p>
+              <p>• <b>Aspect Ratio:</b> 1920:700 (ওয়াইড স্ক্রিন ল্যান্ডস্কেপ)</p>
             </div>
           </div>
 
@@ -113,9 +170,8 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
               <span>২. 📱 Mobile Hero Banner (মোবাইল সাইজ)</span>
             </div>
             <div className="text-[11px] text-gray-600 space-y-0.5 pl-6">
-              <p>• <b>স্ট্যান্ডার্ড সাইজ:</b> <span className="text-purple-700 font-semibold">800 × 900 pixels</span> অথবা 750 × 750 px</p>
-              <p>• <b>হাই-কোয়ালিটি স্কয়ার:</b> 1080 × 1080 pixels (1:1 Ratio)</p>
-              <p>• <b>Aspect Ratio:</b> 4:5 অথবা 1:1 (পোর্ট্রেট / স্কয়ার)</p>
+              <p>• <b>রেকমেন্ডেড সাইজ:</b> <span className="text-purple-700 font-semibold">800 × 900 pixels</span> (পোর্ট্রেট ফিট)</p>
+              <p>• <b>Aspect Ratio:</b> 800:900 (মোবাইল স্কয়ার/পোর্ট্রেট)</p>
             </div>
           </div>
         </div>
@@ -127,7 +183,7 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <h2 className="font-sans font-bold text-base text-gray-900 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#725b38]" />
-              <span>Homepage Hero Banner Settings & URLs</span>
+              <span>Homepage Hero Banner Settings</span>
             </h2>
 
             {/* Live Preview Switcher */}
@@ -156,51 +212,94 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-            {/* 1. Desktop Banner URL */}
-            <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100/80 space-y-2">
+            {/* 1. Desktop Banner Upload & URL */}
+            <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100/80 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-gray-900 flex items-center gap-1.5">
                   <Monitor className="w-4 h-4 text-blue-600" />
-                  <span>💻 Desktop Banner Image URL (1920 × 700 px)</span>
+                  <span>💻 Desktop Banner Image (1920 × 700 px)</span>
                 </label>
                 <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
-                  16:6 / 16:7
+                  1920×700
                 </span>
               </div>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/... (1920x700)"
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                required
+
+              {/* Device File Input */}
+              <input 
+                type="file" 
+                ref={desktopFileInputRef} 
+                onChange={handleDesktopFileChange} 
+                accept="image/*" 
+                className="hidden" 
               />
-              <p className="text-[10px] text-gray-500">
-                ডেস্কটপ ও ল্যাপটপ স্ক্রিনের জন্য (1920 × 700 px recommended)
-              </p>
+
+              <div 
+                onClick={() => desktopFileInputRef.current?.click()}
+                className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group"
+              >
+                <Upload className="w-6 h-6 text-blue-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-blue-700 block">
+                  মোবাইল বা কম্পিউটার থেকে ছবি সিলেক্ট করুন
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  (PNG, JPG, WEBP, JPEG সাপোর্টেড)
+                </span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="অথবা ইমেজ ইউআরএল বসান..."
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
 
-            {/* 2. Mobile Banner URL */}
-            <div className="bg-purple-50/40 p-4 rounded-xl border border-purple-100/80 space-y-2">
+            {/* 2. Mobile Banner Upload & URL */}
+            <div className="bg-purple-50/40 p-4 rounded-xl border border-purple-100/80 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-gray-900 flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-purple-600" />
-                  <span>📱 Mobile Banner Image URL (800 × 900 px)</span>
+                  <span>📱 Mobile Banner Image (800 × 900 px)</span>
                 </label>
                 <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded">
-                  4:5 / 1:1
+                  800×900
                 </span>
               </div>
-              <input
-                type="url"
-                value={mobileImageUrl}
-                onChange={(e) => setMobileImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/... (800x900 or 1080x1080)"
-                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+
+              {/* Mobile Device File Input */}
+              <input 
+                type="file" 
+                ref={mobileFileInputRef} 
+                onChange={handleMobileFileChange} 
+                accept="image/*" 
+                className="hidden" 
               />
-              <p className="text-[10px] text-gray-500">
-                মোবাইল ফোনের জন্য (ফাঁকা রাখলে স্বয়ংক্রিয়ভাবে Desktop Banner ব্যবহার হবে)
-              </p>
+
+              <div 
+                onClick={() => mobileFileInputRef.current?.click()}
+                className="border-2 border-dashed border-purple-200 hover:border-purple-400 bg-white p-3.5 rounded-xl text-center cursor-pointer transition-colors group"
+              >
+                <Upload className="w-6 h-6 text-purple-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-purple-700 block">
+                  মোবাইল ব্যানার সিলেক্ট করুন
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  (ডিভাইস থেকে পছন্দমতো মোবাইল সাইজ ছবি বেছে নিন)
+                </span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="url"
+                  value={mobileImageUrl}
+                  onChange={(e) => setMobileImageUrl(e.target.value)}
+                  placeholder="অথবা মোবাইল ইমেজ ইউআরএল বসান..."
+                  className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                />
+              </div>
             </div>
 
             {/* Live Visual Preview Frame */}
@@ -210,7 +309,7 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
                   <ImageIcon className="w-3.5 h-3.5 text-[#fedeb2]" />
                   <span>Live Aspect Ratio Preview: {previewDevice === 'desktop' ? 'Desktop Screen (1920 × 700 px)' : 'Mobile Screen (800 × 900 px)'}</span>
                 </span>
-                <span>{previewDevice === 'desktop' ? 'Aspect 1920:700' : 'Aspect 800:900'}</span>
+                <span>{previewDevice === 'desktop' ? '1920:700' : '800:900'}</span>
               </div>
 
               <div className="flex justify-center items-center py-2 bg-black/40 rounded-xl overflow-hidden">
@@ -219,66 +318,25 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
                     <img 
                       src={imageUrl || 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1920&auto=format&fit=crop'} 
                       alt="Desktop Preview" 
-                      className="w-full h-full object-contain object-center"
+                      className="w-full h-full object-cover object-center"
                     />
                     <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded font-mono">
                       1920 × 700 px (Desktop)
                     </div>
                   </div>
                 ) : (
-                  <div className="w-[200px] sm:w-[240px] max-h-[320px] rounded-xl overflow-hidden bg-black relative border-2 border-white/20 shadow-2xl flex items-center justify-center p-1">
+                  <div className="w-[200px] sm:w-[240px] aspect-[800/900] max-h-[300px] rounded-xl overflow-hidden bg-black relative border-2 border-white/20 shadow-2xl flex items-center justify-center p-0.5">
                     <img 
                       src={mobileImageUrl || imageUrl || 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1920&auto=format&fit=crop'} 
                       alt="Mobile Preview" 
-                      className="w-full h-auto max-h-[300px] object-contain object-center rounded-lg"
+                      className="w-full h-full object-cover object-center rounded-lg"
                     />
                     <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[9px] px-2 py-0.5 rounded font-mono">
-                      Mobile Uncropped
+                      800 × 900 px (Mobile)
                     </div>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Other Meta Fields */}
-            <div>
-              <label className="block font-bold text-gray-700 uppercase mb-1">Badge Text</label>
-              <input
-                type="text"
-                value={badge}
-                onChange={(e) => setBadge(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-900"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 uppercase mb-1">Hero CTA Button Text</label>
-              <input
-                type="text"
-                value={buttonText}
-                onChange={(e) => setButtonText(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-900"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block font-bold text-gray-700 uppercase mb-1">Headline</label>
-              <input
-                type="text"
-                value={headline}
-                onChange={(e) => setHeadline(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-900"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block font-bold text-gray-700 uppercase mb-1">Sub-headline Description</label>
-              <textarea
-                rows={2}
-                value={subheadline}
-                onChange={(e) => setSubheadline(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 resize-none"
-              />
             </div>
           </div>
         </div>
@@ -373,3 +431,4 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
     </div>
   );
 };
+

@@ -28,21 +28,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   return (
     <section 
-      className="relative w-full overflow-hidden bg-[#111111] cursor-default select-none shadow-xs"
+      className="relative w-full overflow-hidden bg-[#0f172a] cursor-pointer select-none shadow-sm"
+      onClick={onExploreCollection}
     >
-      {/* 💻 Desktop Banner Container (Displays full wide banner crisply, locked & no zoom) */}
-      <div className="hidden md:block w-full max-h-[700px] relative overflow-hidden bg-[#111111] pointer-events-none">
+      {/* 💻 Desktop Banner Container (1920 × 700 px Aspect Ratio) */}
+      <div className="hidden md:block w-full aspect-[1920/700] relative overflow-hidden bg-[#0f172a]">
         <img 
           src={desktopSrc} 
           alt={banner?.headline || "Elegan BD Luxury Formal Pants - Desktop Banner"} 
           onError={() => setDesktopSrc(HERO_IMAGE)}
           referrerPolicy="no-referrer"
-          className="w-full h-auto max-h-[700px] object-cover object-center mx-auto block"
+          className="w-full h-full object-cover object-center block"
         />
       </div>
 
-      {/* 📱 Mobile Hero Banner Container (100% full width, uncropped, locked & no zoom) */}
-      <div className="block md:hidden w-full relative overflow-hidden bg-[#111111] pointer-events-none">
+      {/* 📱 Mobile Hero Banner Container (800 × 900 px Aspect Ratio) */}
+      <div className="block md:hidden w-full aspect-[800/900] relative overflow-hidden bg-[#0f172a]">
         <img 
           src={mobileSrc} 
           alt={banner?.headline || "Elegan BD Luxury Formal Pants - Mobile Banner"} 
@@ -54,9 +55,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             }
           }}
           referrerPolicy="no-referrer"
-          className="w-full h-auto block object-contain object-center mx-auto"
+          className="w-full h-full object-cover object-center block"
         />
       </div>
     </section>
   );
 };
+
+

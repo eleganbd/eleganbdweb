@@ -4,6 +4,7 @@ import whitePantImg from '../assets/images/pant_white_1789811810774.jpg';
 import creamPantImg from '../assets/images/pant_cream_1789811869967.jpg';
 import navyPantImg from '../assets/images/pant_navy_1789811850541.jpg';
 import { TrouserProduct, SizeNumber, HemStyle } from '../types';
+import { HERO_IMAGE } from '../data/products';
 
 export interface CollectionItem {
   id: string;
@@ -102,6 +103,9 @@ export const AllCollections: React.FC<AllCollectionsProps> = ({ products = [], o
                   src={product.imageUrl}
                   alt={product.name}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = HERO_IMAGE;
+                  }}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
                 />
               </div>
