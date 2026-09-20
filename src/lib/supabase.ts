@@ -220,8 +220,42 @@ export const supabaseService = {
     }
   },
 
+  async saveProductsList(products: TrouserProduct[]): Promise<boolean> {
+    try {
+      // 1. Save complete JSON array in site_settings for 100% fidelity
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert({
+          key: 'products_list',
+          value: products
+        }, { onConflict: 'key' });
+
+      // 2. Also try individual product upserts for SQL table consistency
+      for (const p of products) {
+        this.saveProduct(p);
+      }
+
+      return !error;
+    } catch (err) {
+      console.warn('Supabase saveProductsList error:', err);
+      return false;
+    }
+  },
+
   async getProducts(): Promise<TrouserProduct[] | null> {
     try {
+      // First try fetching full products_list from site_settings
+      const { data: settingsData } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'products_list')
+        .maybeSingle();
+
+      if (settingsData && settingsData.value && Array.isArray(settingsData.value) && settingsData.value.length > 0) {
+        return settingsData.value as TrouserProduct[];
+      }
+
+      // Fallback to products table
       const { data, error } = await supabase
         .from('products')
         .select('*');

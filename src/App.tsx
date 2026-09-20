@@ -25,7 +25,7 @@ import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { MessageSquare, Phone } from 'lucide-react';
 import { PRODUCTS, REVIEWS } from './data/products';
-import { supabaseService } from './lib/supabase';
+import { supabaseService, supabase } from './lib/supabase';
 import { initMetaPixel, trackMetaPixelEvent } from './lib/metaPixel';
 import { 
   INITIAL_CATEGORIES, 
@@ -297,7 +297,7 @@ export default function App() {
     }
   };
 
-  // Load Supabase Data on App Mount (Orders, Products, Banner)
+  // Load Supabase Data on App Mount & Listen to Realtime Changes
   useEffect(() => {
     const fetchRemoteData = async () => {
       try {
@@ -312,27 +312,72 @@ export default function App() {
 
         const remoteProducts = await supabaseService.getProducts();
         if (remoteProducts && remoteProducts.length > 0) {
-          setProductsList(prev => {
-            const remoteIds = new Set(remoteProducts.map(p => p.id));
-            const localOnly = prev.filter(p => !remoteIds.has(p.id));
-            return [...remoteProducts, ...localOnly];
-          });
+          setProductsList(remoteProducts);
+          try {
+            localStorage.setItem('elegan_products_list', JSON.stringify(remoteProducts));
+          } catch {}
         }
 
         const remoteBanner = await supabaseService.getBanner();
         if (remoteBanner) {
           setCmsBannerData(remoteBanner);
+          try {
+            localStorage.setItem('elegan_cms_banner', JSON.stringify(remoteBanner));
+          } catch {}
         }
 
         const remoteSettings = await supabaseService.getStoreSettings();
         if (remoteSettings) {
           setStoreSettingsData(remoteSettings);
+          try {
+            localStorage.setItem('elegan_store_settings', JSON.stringify(remoteSettings));
+          } catch {}
         }
       } catch (e) {
         console.warn('Initial Supabase fetch note:', e);
       }
     };
+
     fetchRemoteData();
+
+    // 1. Supabase Realtime Subscription for instant live updates across devices
+    const channel = supabase
+      .channel('site_settings_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'site_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new === 'object') {
+            const row = payload.new as { key?: string; value?: any };
+            if (row.key === 'hero_banner' && row.value) {
+              setCmsBannerData(row.value);
+            } else if (row.key === 'products_list' && Array.isArray(row.value) && row.value.length > 0) {
+              setProductsList(row.value);
+            } else if (row.key === 'store_settings' && row.value) {
+              setStoreSettingsData(row.value);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Storage event listener for instant multi-tab sync in same browser
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'elegan_cms_banner' && e.newValue) {
+        try { setCmsBannerData(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === 'elegan_products_list' && e.newValue) {
+        try { setProductsList(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === 'elegan_store_settings' && e.newValue) {
+        try { setStoreSettingsData(JSON.parse(e.newValue)); } catch {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const handleOrderPlaced = (order: OrderDetails) => {
@@ -410,23 +455,34 @@ export default function App() {
 
   // Admin Products CRUD
   const handleAddProduct = (newProd: TrouserProduct) => {
-    setProductsList(prev => [newProd, ...prev]);
-    supabaseService.saveProduct(newProd);
+    const updated = [newProd, ...productsList];
+    setProductsList(updated);
+    try {
+      localStorage.setItem('elegan_products_list', JSON.stringify(updated));
+    } catch {}
+    supabaseService.saveProductsList(updated);
     showToast(`Product "${newProd.name}" added & saved to Supabase`);
   };
 
   const handleUpdateProduct = (updatedProd: TrouserProduct) => {
-    setProductsList(prev =>
-      prev.map(p => p.id === updatedProd.id ? updatedProd : p)
-    );
-    supabaseService.saveProduct(updatedProd);
+    const updated = productsList.map(p => p.id === updatedProd.id ? updatedProd : p);
+    setProductsList(updated);
+    try {
+      localStorage.setItem('elegan_products_list', JSON.stringify(updated));
+    } catch {}
+    supabaseService.saveProductsList(updated);
     showToast(`Product "${updatedProd.name}" updated & synced`);
   };
 
   const handleDeleteProduct = async (id: string) => {
     const target = productsList.find(p => p.id === id);
-    setProductsList(prev => prev.filter(p => p.id !== id));
+    const updated = productsList.filter(p => p.id !== id);
+    setProductsList(updated);
+    try {
+      localStorage.setItem('elegan_products_list', JSON.stringify(updated));
+    } catch {}
     await supabaseService.deleteProduct(id);
+    await supabaseService.saveProductsList(updated);
     showToast(`Product "${target?.name || id}" successfully deleted from store & Supabase`);
   };
 
@@ -455,7 +511,7 @@ export default function App() {
   };
 
   const handleUpdateProductStock = (productId: string, sizeStockMap: Record<string, number>) => {
-    setProductsList(prev => prev.map(p => {
+    const updated = productsList.map(p => {
       if (p.id !== productId) return p;
       return {
         ...p,
@@ -464,7 +520,12 @@ export default function App() {
           ...sizeStockMap
         }
       };
-    }));
+    });
+    setProductsList(updated);
+    try {
+      localStorage.setItem('elegan_products_list', JSON.stringify(updated));
+    } catch {}
+    supabaseService.saveProductsList(updated);
     showToast(`Stock updated successfully`);
   };
 
