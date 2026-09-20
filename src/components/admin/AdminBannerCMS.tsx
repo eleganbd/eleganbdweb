@@ -43,25 +43,17 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Helper function to process uploaded files (resizes if huge for fast loading)
-  const processImageFile = async (file: File, isMobile: boolean) => {
-    if (!file) return;
-    if (isMobile) setIsUploadingMobile(true);
-    else setIsUploadingDesktop(true);
-
-    try {
-      // 1. Try uploading to Supabase Storage first
-      const publicStorageUrl = await supabaseService.uploadAssetFile(file, isMobile ? 'mobile-banners' : 'desktop-banners');
-      if (publicStorageUrl) {
-        if (isMobile) setMobileImageUrl(publicStorageUrl);
-        else setImageUrl(publicStorageUrl);
-        return;
-      }
-
-      // 2. Fallback: Compress using HTML5 Canvas to lightweight JPEG
+  // Helper function to compress images reliably into a lightweight Data URL
+  const compressImageToDataUrl = (file: File, isMobile: boolean): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read image file'));
       reader.onload = (event) => {
+        const rawSrc = event.target?.result as string;
+        if (!rawSrc) return reject(new Error('Empty file contents'));
+        
         const img = new Image();
+        img.onerror = () => resolve(rawSrc); // fallback to raw
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let width = img.width;
@@ -85,21 +77,39 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-            if (isMobile) {
-              setMobileImageUrl(compressedDataUrl);
-            } else {
-              setImageUrl(compressedDataUrl);
-            }
+            resolve(canvas.toDataURL('image/jpeg', quality));
           } else {
-            const rawUrl = event.target?.result as string;
-            if (isMobile) setMobileImageUrl(rawUrl);
-            else setImageUrl(rawUrl);
+            resolve(rawSrc);
           }
         };
-        img.src = event.target?.result as string;
+        img.src = rawSrc;
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Helper function to process uploaded files (resizes if huge for fast loading)
+  const processImageFile = async (file: File, isMobile: boolean) => {
+    if (!file) return;
+    if (isMobile) setIsUploadingMobile(true);
+    else setIsUploadingDesktop(true);
+
+    try {
+      // 1. Try uploading to Supabase Storage first
+      const publicStorageUrl = await supabaseService.uploadAssetFile(file, isMobile ? 'mobile-banners' : 'desktop-banners');
+      if (publicStorageUrl) {
+        if (isMobile) setMobileImageUrl(publicStorageUrl);
+        else setImageUrl(publicStorageUrl);
+        return;
+      }
+
+      // 2. Fallback: Compress using HTML5 Canvas & await promise completion!
+      const compressedDataUrl = await compressImageToDataUrl(file, isMobile);
+      if (isMobile) {
+        setMobileImageUrl(compressedDataUrl);
+      } else {
+        setImageUrl(compressedDataUrl);
+      }
     } catch (err) {
       console.warn('Image processing error:', err);
     } finally {
@@ -464,10 +474,20 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
         <div className="flex justify-end">
           <button
             type="submit"
-            className="px-6 py-3 bg-[#725b38] hover:bg-[#856b43] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            disabled={isUploadingDesktop || isUploadingMobile}
+            className="px-6 py-3 bg-[#725b38] hover:bg-[#856b43] disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center gap-2 cursor-pointer"
           >
-            <Save className="w-4 h-4" />
-            <span>SAVE BANNER & CMS CHANGES</span>
+            {isUploadingDesktop || isUploadingMobile ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>PROCESSING IMAGE...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>SAVE BANNER & CMS CHANGES</span>
+              </>
+            )}
           </button>
         </div>
       </form>
