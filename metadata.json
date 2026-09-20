@@ -1,0 +1,6 @@
+{
+  "name": "Elegan BD - Haute Tailoring Dhaka",
+  "description": "Export quality formal trousers and bespoke menswear tailored in Dhaka, Bangladesh with nationwide cash on delivery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
