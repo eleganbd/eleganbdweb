@@ -152,6 +152,7 @@ export interface CMSBanner {
   buttonText: string;
   imageUrl: string; // Desktop banner (1920 × 700 px)
   mobileImageUrl?: string; // Mobile banner (800 × 900 px / 1080 × 1080 px)
+  updatedAt?: number;
 }
 
 export interface StoreSettings {

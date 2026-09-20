@@ -203,39 +203,51 @@ export const supabaseService = {
         .upsert({
           id: product.id,
           name: product.name,
-          subtitle: product.subtitle,
+          subtitle: product.subtitle || '',
           category: product.category || 'Pant',
           price: product.price,
-          original_price: product.originalPrice,
-          badge: product.badge,
-          color_name: product.colorName,
-          image_url: product.imageUrl,
-          description: product.description,
-          stock_status: product.stockStatus,
-          available_sizes: product.availableSizes
-        });
+          original_price: product.originalPrice || product.price,
+          badge: product.badge || '',
+          color_name: product.colorName || '',
+          image_url: product.imageUrl || '',
+          description: product.description || '',
+          stock_status: product.stockStatus || 'In Stock',
+          available_sizes: (product.availableSizes || []).map(String)
+        }, { onConflict: 'id' });
+
+      if (error) {
+        console.warn('Supabase saveProduct table note:', error.message);
+      }
       return !error;
-    } catch {
+    } catch (err) {
+      console.warn('Supabase saveProduct error:', err);
       return false;
     }
   },
 
   async saveProductsList(products: TrouserProduct[]): Promise<boolean> {
     try {
-      // 1. Save complete JSON array in site_settings for 100% fidelity
-      const { error } = await supabase
+      // 1. Save complete JSON array in site_settings for 100% fidelity & speed
+      const { error: settingsErr } = await supabase
         .from('site_settings')
         .upsert({
           key: 'products_list',
-          value: products
+          value: products,
+          updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
 
-      // 2. Also try individual product upserts for SQL table consistency
-      for (const p of products) {
-        this.saveProduct(p);
+      if (settingsErr) {
+        console.warn('Supabase site_settings products_list upsert note:', settingsErr.message);
       }
 
-      return !error;
+      // 2. Also try individual product upserts for SQL table consistency
+      let tableSuccess = true;
+      for (const p of products) {
+        const ok = await this.saveProduct(p);
+        if (!ok) tableSuccess = false;
+      }
+
+      return !settingsErr || tableSuccess;
     } catch (err) {
       console.warn('Supabase saveProductsList error:', err);
       return false;
@@ -280,7 +292,7 @@ export const supabaseService = {
         galleryImages: row.gallery_images || [row.image_url],
         description: row.description || '',
         fabricSpecs: row.fabric_specs || [],
-        availableSizes: row.available_sizes || [28, 30, 32, 34, 36, 38]
+        availableSizes: (row.available_sizes || ['28', '30', '32', '34', '36', '38']).map((s: string | number) => isNaN(Number(s)) ? s : Number(s)) as any
       }));
     } catch (err) {
       console.warn('Supabase getProducts error:', err);
@@ -305,13 +317,23 @@ export const supabaseService = {
   // ==============================
   async saveBanner(banner: CMSBanner): Promise<boolean> {
     try {
+      const payload = {
+        key: 'hero_banner',
+        value: {
+          ...banner,
+          updatedAt: banner.updatedAt || Date.now()
+        },
+        updated_at: new Date().toISOString()
+      };
       const { error } = await supabase
         .from('site_settings')
-        .upsert({
-          key: 'hero_banner',
-          value: banner
-        }, { onConflict: 'key' });
-      return !error;
+        .upsert(payload, { onConflict: 'key' });
+
+      if (error) {
+        console.warn('Supabase saveBanner note:', error.message);
+        return false;
+      }
+      return true;
     } catch (err) {
       console.warn('Supabase saveBanner error:', err);
       return false;

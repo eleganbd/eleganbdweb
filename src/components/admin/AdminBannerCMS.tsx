@@ -50,8 +50,9 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
         let width = img.width;
         let height = img.height;
 
-        // Cap max dimensions to keep payload clean & fast
-        const maxDim = isMobile ? 1200 : 2000;
+        // Cap max dimensions to keep payload clean, fast & database friendly
+        const maxDim = isMobile ? 900 : 1600;
+        const quality = isMobile ? 0.80 : 0.82;
         if (width > maxDim || height > maxDim) {
           if (width > height) {
             height = Math.round((height * maxDim) / width);
@@ -67,7 +68,7 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
           if (isMobile) {
             setMobileImageUrl(compressedDataUrl);
           } else {
@@ -108,7 +109,8 @@ export const AdminBannerCMS: React.FC<AdminBannerCMSProps> = ({
       badge: badge.trim(),
       buttonText: buttonText.trim(),
       imageUrl: imageUrl.trim(),
-      mobileImageUrl: mobileImageUrl.trim()
+      mobileImageUrl: mobileImageUrl.trim(),
+      updatedAt: Date.now()
     });
 
     onUpdateSettings({

@@ -312,18 +312,48 @@ export default function App() {
 
         const remoteProducts = await supabaseService.getProducts();
         if (remoteProducts && remoteProducts.length > 0) {
-          setProductsList(remoteProducts);
-          try {
-            localStorage.setItem('elegan_products_list', JSON.stringify(remoteProducts));
-          } catch {}
+          setProductsList(prev => {
+            const remoteIds = new Set(remoteProducts.map(p => p.id));
+            const localOnly = prev.filter(p => !remoteIds.has(p.id));
+            const merged = [...remoteProducts, ...localOnly];
+            if (localOnly.length > 0) {
+              supabaseService.saveProductsList(merged);
+            }
+            try {
+              localStorage.setItem('elegan_products_list', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        } else {
+          // If remote database had no products_list yet, seed current products to Supabase
+          setProductsList(prev => {
+            if (prev && prev.length > 0) {
+              supabaseService.saveProductsList(prev);
+            }
+            return prev;
+          });
         }
 
         const remoteBanner = await supabaseService.getBanner();
         if (remoteBanner) {
-          setCmsBannerData(remoteBanner);
-          try {
-            localStorage.setItem('elegan_cms_banner', JSON.stringify(remoteBanner));
-          } catch {}
+          setCmsBannerData(prev => {
+            const prevTime = prev?.updatedAt || 0;
+            const remoteTime = remoteBanner?.updatedAt || 0;
+            if (remoteTime >= prevTime) {
+              try {
+                localStorage.setItem('elegan_cms_banner', JSON.stringify(remoteBanner));
+              } catch {}
+              return remoteBanner;
+            } else {
+              supabaseService.saveBanner(prev);
+              return prev;
+            }
+          });
+        } else {
+          setCmsBannerData(prev => {
+            if (prev) supabaseService.saveBanner(prev);
+            return prev;
+          });
         }
 
         const remoteSettings = await supabaseService.getStoreSettings();
@@ -340,8 +370,8 @@ export default function App() {
 
     fetchRemoteData();
 
-    // 1. Supabase Realtime Subscription for instant live updates across devices
-    const channel = supabase
+    // 1. Supabase Realtime Subscriptions for instant live updates across devices
+    const channelSettings = supabase
       .channel('site_settings_realtime')
       .on(
         'postgres_changes',
@@ -353,9 +383,29 @@ export default function App() {
               setCmsBannerData(row.value);
             } else if (row.key === 'products_list' && Array.isArray(row.value) && row.value.length > 0) {
               setProductsList(row.value);
+              try {
+                localStorage.setItem('elegan_products_list', JSON.stringify(row.value));
+              } catch {}
             } else if (row.key === 'store_settings' && row.value) {
               setStoreSettingsData(row.value);
             }
+          }
+        }
+      )
+      .subscribe();
+
+    const channelProducts = supabase
+      .channel('products_table_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        async () => {
+          const fresh = await supabaseService.getProducts();
+          if (fresh && fresh.length > 0) {
+            setProductsList(fresh);
+            try {
+              localStorage.setItem('elegan_products_list', JSON.stringify(fresh));
+            } catch {}
           }
         }
       )
@@ -375,7 +425,8 @@ export default function App() {
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelSettings);
+      supabase.removeChannel(channelProducts);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -454,24 +505,32 @@ export default function App() {
   };
 
   // Admin Products CRUD
-  const handleAddProduct = (newProd: TrouserProduct) => {
+  const handleAddProduct = async (newProd: TrouserProduct) => {
     const updated = [newProd, ...productsList];
     setProductsList(updated);
     try {
       localStorage.setItem('elegan_products_list', JSON.stringify(updated));
     } catch {}
-    supabaseService.saveProductsList(updated);
-    showToast(`Product "${newProd.name}" added & saved to Supabase`);
+    const synced = await supabaseService.saveProductsList(updated);
+    if (synced) {
+      showToast(`পণ্য "${newProd.name}" সফলভাবে যুক্ত ও Supabase লাইভ ক্লাউডে সেভ হয়েছে!`);
+    } else {
+      showToast(`পণ্য "${newProd.name}" যুক্ত হয়েছে (Supabase Sync পেন্ডিং)`);
+    }
   };
 
-  const handleUpdateProduct = (updatedProd: TrouserProduct) => {
+  const handleUpdateProduct = async (updatedProd: TrouserProduct) => {
     const updated = productsList.map(p => p.id === updatedProd.id ? updatedProd : p);
     setProductsList(updated);
     try {
       localStorage.setItem('elegan_products_list', JSON.stringify(updated));
     } catch {}
-    supabaseService.saveProductsList(updated);
-    showToast(`Product "${updatedProd.name}" updated & synced`);
+    const synced = await supabaseService.saveProductsList(updated);
+    if (synced) {
+      showToast(`পণ্য "${updatedProd.name}" আপডেট ও Supabase সিঙ্ক হয়েছে!`);
+    } else {
+      showToast(`পণ্য "${updatedProd.name}" আপডেট হয়েছে`);
+    }
   };
 
   const handleDeleteProduct = async (id: string) => {
@@ -483,7 +542,7 @@ export default function App() {
     } catch {}
     await supabaseService.deleteProduct(id);
     await supabaseService.saveProductsList(updated);
-    showToast(`Product "${target?.name || id}" successfully deleted from store & Supabase`);
+    showToast(`পণ্য "${target?.name || id}" সফলভাবে মুছে ফেলা হয়েছে`);
   };
 
   // Admin Categories CRUD
@@ -619,15 +678,23 @@ export default function App() {
           onDeleteReview={handleDeleteReview}
           onAddAdmin={handleAddAdmin}
           onDeleteAdmin={handleDeleteAdmin}
-          onUpdateBanner={(b) => {
-            setCmsBannerData(b);
+          onUpdateBanner={async (b) => {
+            const bannerWithTime = {
+              ...b,
+              updatedAt: b.updatedAt || Date.now()
+            };
+            setCmsBannerData(bannerWithTime);
             try {
-              localStorage.setItem('elegan_cms_banner', JSON.stringify(b));
+              localStorage.setItem('elegan_cms_banner', JSON.stringify(bannerWithTime));
             } catch (e) {
               console.warn('Banner localStorage save error:', e);
             }
-            supabaseService.saveBanner(b);
-            showToast('হোমপেজ হিরো ব্যানার সফলভাবে আপডেট এবং সুপাবেসে সেভ হয়েছে!');
+            const synced = await supabaseService.saveBanner(bannerWithTime);
+            if (synced) {
+              showToast('নতুন ব্যানার ইমেজ সফলভাবে লাইভ ওয়েবসাইটে এবং ক্লাউডে সেভ হয়েছে!');
+            } else {
+              showToast('ব্যানার লোকালি আপডেট হয়েছে (সুপাবেস সিঙ্ক পেন্ডিং)');
+            }
           }}
           onUpdateSettings={(s) => {
             setStoreSettingsData(s);

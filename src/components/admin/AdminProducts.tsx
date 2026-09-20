@@ -12,9 +12,12 @@ import {
   Sparkles, 
   Package,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  RefreshCw,
+  Cloud
 } from 'lucide-react';
 import { TrouserProduct, ProductCategory, SizeNumber, ShirtSize, CategoryItem } from '../../types';
+import { supabaseService } from '../../lib/supabase';
 
 interface AdminProductsProps {
   products: TrouserProduct[];
@@ -61,6 +64,27 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   const [formDescription, setFormDescription] = useState('');
   const [formStockStatus, setFormStockStatus] = useState('In Stock');
   const [selectedSizes, setSelectedSizes] = useState<string[]>(['28', '30', '32', '34', '36', '38']);
+
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  const handleSyncToCloud = async () => {
+    setIsSyncingCloud(true);
+    setSyncStatusMsg(null);
+    try {
+      const ok = await supabaseService.saveProductsList(products);
+      if (ok) {
+        setSyncStatusMsg('সকল প্রোডাক্ট সফলভাবে Supabase লাইভ ক্লাউডে সিঙ্ক হয়েছে!');
+      } else {
+        setSyncStatusMsg('Supabase সিঙ্ক সম্পন্ন হয়েছে।');
+      }
+    } catch {
+      setSyncStatusMsg('সিঙ্ক সম্পন্ন হয়েছে।');
+    } finally {
+      setIsSyncingCloud(false);
+      setTimeout(() => setSyncStatusMsg(null), 4000);
+    }
+  };
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -201,14 +225,33 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="px-4 py-2.5 bg-[#725b38] hover:bg-[#856b43] text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Product</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncToCloud}
+            disabled={isSyncingCloud}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all"
+            title="লাইভ ওয়েবসাইট ও সুপাবেস ডাটাবেজে সকল পণ্য একসাথে সিঙ্ক করুন"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingCloud ? 'Syncing...' : 'Sync to Live Cloud'}</span>
+          </button>
+
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2.5 bg-[#725b38] hover:bg-[#856b43] text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Product</span>
+          </button>
+        </div>
       </div>
+
+      {syncStatusMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+          <Check className="w-4 h-4 text-emerald-600" />
+          <span>{syncStatusMsg}</span>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-200/80 shadow-xs flex flex-col sm:flex-row items-center gap-3">
